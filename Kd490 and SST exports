@@ -1,0 +1,385 @@
+//////////////////////////////////////////////////
+//// Aqua Kd(490) and MODIS Sea Surface Temperature (SST) by Ileana Callejas
+///
+/// This script calculates the daily mean SST and Kd(490) for any uploaded shapefile or geometry.
+/// Ensure the geometry is named "mpa".
+/// The time frame can be changed in the first few lines.
+/// The script can be used to export the daily means and pixel counts as a CSV through download in 
+/// the console. Maps of the mean for the selected time period can also be exported as a Tiff file
+/// to the Google Drive account connected to your GEE acocunt.
+///
+//////////////////////////////////////////////////
+
+Map.centerObject(mpa,8);
+
+// AQUA TIME FRAME
+var startDayAqua = ee.Date('2005-09-01'); // set start time for analysis
+var endDayAqua = ee.Date('2005-10-01'); // set end time for analysis
+
+
+// IMPORT COLLECTION & FILTER BY AREA AND TIME
+var aqua = ee.ImageCollection("NASA/OCEANDATA/MODIS-Aqua/L3SMI")
+    .filterBounds(mpa)
+    .filterDate(startDayAqua, endDayAqua);
+    
+/////////////////////////////////////////////////////////////////
+//////////////          KD(490)              ///////////////////
+////////////////////////////////////////////////////////////////
+
+// GET FIRST IMAGE  
+var aqua_img = aqua.first();
+
+// PRINT INFO OF AQUA IMAGE COLLECTION
+print(aqua);
+
+// KD(490) Function - NASA Operational Algorithm
+var kd490 = function(aqua_img) {
+  var blue = aqua_img.select('Rrs_488').log10();
+  var green = aqua_img.select('Rrs_547').log10();
+  var x = blue.subtract(green);
+  //MODIS constants
+  var a = ee.Image(-0.8813);
+  var b = ee.Image(2.0584).multiply(x);
+  var c1 = ee.Image(x).pow(2);
+  var c = ee.Image(2.5878).multiply(c1);
+  var d1 = ee.Image(x).pow(3);
+  var d = ee.Image(3.4885).multiply(d1);
+  var e1 = ee.Image(x).pow(4);
+  var e = ee.Image(1.5061).multiply(e1);
+  var exp = a.subtract(b).add(c).subtract(d).subtract(e);
+  var firstterm = ee.Image(10).pow(exp);
+  var kd = firstterm.add(0.0166);
+  
+  return aqua_img.addBands(kd.rename('kd_490'));
+};
+
+// MAP FUNCTION TO ALL IMAGES AND PRINT IMAGE COLLECTION
+var aqua_kd490 = aqua.map(kd490);
+print('Collection:', aqua_kd490);
+
+//  VISUALIZATIONS FOR MAP
+var kd490_viz = {
+  bands: 'kd_490',
+  min:0,
+  max:1,
+  palette: ['#1E96A6','#B5D9D9','#ffffff','#c09569','#795D43']
+};
+
+//  CALCULATE AVERAGE
+var avg_aqua_kd490 = aqua_kd490.select('kd_490')
+    .mean()
+    .clip(mpa);
+
+//  CREATE MAP
+Map.addLayer(avg_aqua_kd490,kd490_viz, "Aqua Kd(490)");
+
+//  EXPORT MAP
+Export.image.toDrive({
+  image: avg_aqua_kd490,
+  description: 'Kd(490)',
+  scale: 4616,
+  region: mpa
+});
+
+//  KD(490) TIMESERIES
+var ts = ui.Chart.image.seriesByRegion({
+  imageCollection: aqua_kd490,
+  regions: mpa,
+  reducer: ee.Reducer.mean(),
+  band: 'kd_490',
+  xProperty: 'system:time_start',
+  seriesProperty: 'New_Name'
+});
+print(ts);
+
+
+// TIMESERIES BY REGION COUNT
+var ts_n = ui.Chart.image.seriesByRegion({
+  imageCollection: aqua_kd490,
+  regions: mpa,
+  reducer: ee.Reducer.count(),
+  band: 'kd_490',
+  xProperty: 'system:time_start',
+  seriesProperty: 'New_Name'
+});
+print(ts_n);
+
+
+/////////////////////////////////////////////////////////////////
+//////////////          AQUA SST              /////////////////
+////////////////////////////////////////////////////////////////
+
+//  SELECT SST BAND, AVERAGE, AND CLIP
+var aqua_sst = aqua.select('sst')
+    .mean()
+    .clip(mpa);
+    
+// SST VISUALIZATION
+var sst_viz = {
+  bands: 'sst',
+  min:23,
+  max:33,
+  palette: ['blue','white','red']
+};
+
+//  CREATE MAP
+Map.addLayer(aqua_sst, sst_viz, "Aqua SST");
+
+//  EXPORT MAP
+Export.image.toDrive({
+  image: aqua_sst,
+  description: 'Aqua-SST',
+  scale: 4616,
+  region: mpa
+});
+
+
+//  SST TIMESERIES
+var ts = ui.Chart.image.seriesByRegion({
+  imageCollection: aqua,
+  regions: mpa,
+  reducer: ee.Reducer.mean(),
+  band: 'sst',
+  xProperty: 'system:time_start',
+  seriesProperty: 'New_Name'
+});
+print(ts);
+
+
+//  TIMESERIES BY REGION COUNT
+var ts_n = ui.Chart.image.seriesByRegion({
+  imageCollection: aqua,
+  regions: mpa,
+  reducer: ee.Reducer.count(),
+  band: 'sst',
+  xProperty: 'system:time_start',
+  seriesProperty: 'New_Name'
+});
+print(ts_n);
+
+
+
+
+// BACKGROUND COLOR
+var mapStyle = [
+  {
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#212121"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#757575"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#212121"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#757575"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.country",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#9e9e9e"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#bdbdbd"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#757575"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.business",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#181818"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#616161"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#1b1b1b"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#2c2c2c"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#8a8a8a"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#373737"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#3c3c3c"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway.controlled_access",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#4e4e4e"
+      }
+    ]
+  },
+  {
+    "featureType": "road.local",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#616161"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#757575"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#000000"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#3d3d3d"
+      }
+    ]
+  }
+]
+
+Map.setOptions('mapStyle', {mapStyle: mapStyle});
