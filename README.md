@@ -1,4 +1,4 @@
-# Google Earth Engine and R Coral Vulnerability Toolkit
+# Google Earth Engine and RStudio Coral Vulnerability Toolkit
 A workflow for Aqua MODIS-derived water clarity and sea surface temperature for Belize Marine Protected Areas in Google Earth Engine and RStudio.
 
 # Citation
