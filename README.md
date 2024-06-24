@@ -1,5 +1,5 @@
-# Google Earth Engine and RStudio Coral Vulnerability Toolkit
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12522740.svg)](https://doi.org/10.5281/zenodo.12522740)
+# Google Earth Engine and RStudio Coral Vulnerability Toolkit
 A workflow for Aqua MODIS-derived water clarity and sea surface temperature for Belize Marine Protected Areas in Google Earth Engine and RStudio.
 
 # Citation
